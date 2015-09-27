@@ -1,0 +1,73 @@
+---
+title: "Practical Machine Learning - Course Project"
+author: ""
+date: "September 27, 2015"
+output: html_document
+---
+
+```{r, echo=FALSE}
+library(caret)
+library(ggplot2)
+library(randomForest)
+```
+
+### Synopsis
+Method of performing unilateral dumbbell curls is measured using accelerometers on the participants waist, forearm and bicep as well as an accelerometer on the dumbbell.  Participants were asked to perform the exercise in one of five variations labeled A = performed to exact specification, B = throwing the elbow to the front, C = lifting only halfway, D = lowering only halfway, E = throwing the hips frontward.  The goal of analysis is to use the measurements of the x, y, and z components of the accleration at each point to identify the variation of the exercise.
+
+### Data Processing
+The raw data (http://groupware.les.inf.puc-rio.br/har) consists of not only of the accelerometer data but gyroscopic (rotation) information along with processed versions of both kinds data sources (totals, skewness, variance, etc). The full dataset is reduced to raw accelerometer data from four sources (belt, arm, forearm and dumbell) and the classe variable for the exercise performed (A, B, C, D, and E).  Each accelerometer has three components to the acceleration (x, y, and z) which correspond to (?) left/right, front/back,  and up/down, respectively.
+
+```{r}
+harURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+harFile <- download.file(harURL, "harData.csv", method = "curl")
+harData <- read.csv("harData.csv",stringsAsFactors = TRUE)
+
+accel_dat <- c(grep("accel",names(harData)))
+trim1 <- harData[c(accel_dat,grep("classe",names(harData)))]
+trim2 <- trim1[-c(grep("var",names(trim1)))]
+training <- trim2[-c(grep("total",names(trim2)))]
+
+harTestURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+harTestFile <- download.file(harTestURL, "harTestData.csv", method = "curl")
+harTestData <- read.csv("harTestData.csv",stringsAsFactors = TRUE)
+
+trim3 <- harTestData[c(accel_dat,grep("classe",names(harTestData)))]
+trim4 <- trim3[-c(grep("var",names(trim3)))]
+testing <- trim4[-c(grep("total",names(trim4)))]
+```
+
+Here's a summary of the data:
+
+```{r, echo=FALSE}
+splom(training[1:6], groups=training$classe, panel=panel.superpose)
+splom(training[7:12], groups=training$classe, panel=panel.superpose)
+```
+
+It's hard to see from the plots, but a couple variables are highly correlated:
+
+```{r}
+M <- abs(cor(training[,-13]))
+diag(M) <- 0
+which(M > 0.8, arr.ind = TRUE)
+M[which(M > 0.8, arr.ind = TRUE)]
+```
+
+### Model Description
+A random forest model is applied to the data
+
+```{r}
+set.seed(1979)
+training.rf <- randomForest(classe~.,data=training,importance = TRUE, proximity = TRUE)
+print(training.rf)
+```
+
+Variable importance is seen below:
+
+```{r, echo=FALSE}
+varImpPlot(training.rf)
+```
+
+### Error expectation and validation
+From the training.rf output, the accuracy can be found from the out-of-bag estimate of the error rate (4.29%) making the accuracy ~95%.  Cross-validation is not required as each tree is created from a set of randomly sampled data with replacement.  Data not sampled in this bootstrapping is considered out-of-bag and treated as a "test" set and the iterations tree is tested on it to calculate the out-of-bag error.
+
+
